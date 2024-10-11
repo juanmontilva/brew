@@ -160,6 +160,21 @@ module UnpackStrategy
     Dir.mktmpdir("homebrew-unpack", HOMEBREW_TEMP) do |tmp_unpack_dir|
       tmp_unpack_dir = Pathname(tmp_unpack_dir)
 
+      # Make sure files inside the temporary directory have the same group as the brew instance.
+      #
+      # @see https://github.com/Homebrew/brew/blob/4.4.0/Library/Homebrew/mktemp.rb#L57-L72
+      group_id = if HOMEBREW_BREW_FILE.grpowned?
+        HOMEBREW_BREW_FILE.stat.gid
+      else
+        Process.gid
+      end
+      begin
+        tmp_unpack_dir.chown(nil, group_id)
+      rescue Errno::EPERM
+        require "etc"
+        opoo "Failed setting group \"#{Etc.getgrgid(group_id)&.name}\" on #{tmp_unpack_dir}"
+      end
+
       extract(to: tmp_unpack_dir, basename:, verbose:)
 
       children = tmp_unpack_dir.children
